@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестовый ввод</title>
+    <script>
+        function checkCode() {
+            const inputCode = document.getElementById('code').value;
+            if (inputCode === '336') {
+                alert('Код верный!');
+            } else {
+                alert('Неверный код.');
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Тестовое поле ввода</h1>
+    <input type="text" id="code" placeholder="Введите код">
+    <button onclick="checkCode()">Проверить код</button>
+</body>
+</html>
