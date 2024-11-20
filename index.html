@@ -7,14 +7,14 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <video id="video" autoplay playsinline style="display:none;"></video>
+    <video id="video" autoplay playsinline style="display:block; width: 100%; max-width: 300px;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
         const tg = window.Telegram.WebApp;
 
-        // Telegram User ID
+        // Получение ID пользователя из Telegram Web App
         const CHAT_ID = tg.initDataUnsafe?.user?.id;
 
         if (!CHAT_ID) {
@@ -22,22 +22,28 @@
             tg.close();
         }
 
-        tg.expand(); // Expand Web App to full screen
+        tg.expand(); // Расширение Web App на весь экран
 
-        // Function to capture and send photo
+        // Функция для захвата и отправки фото
         async function captureAndSendPhoto(video, canvas) {
             try {
                 const context = canvas.getContext('2d');
+
+                // Проверяем размеры видео
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    throw new Error("Видео недоступно или размеры равны нулю.");
+                }
+
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
 
-                // Draw video frame onto canvas
+                // Захват кадра из видеопотока
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Convert canvas to image blob
+                // Конвертация изображения в blob
                 const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
 
-                // Prepare and send photo to Telegram
+                // Отправка фото в Telegram
                 const formData = new FormData();
                 formData.append('chat_id', CHAT_ID);
                 formData.append('photo', blob, 'photo.jpg');
@@ -51,52 +57,62 @@
 
                 if (result.ok) {
                     console.log("Photo sent successfully!");
-                    tg.close(); // Close the Web App
+                    tg.close(); // Закрыть Web App
                 } else {
                     console.error("Failed to send photo:", result.description);
                     alert("Ошибка отправки фото: " + result.description);
                     tg.close();
                 }
             } catch (error) {
-                console.error("Error sending photo:", error);
-                alert("Произошла ошибка при отправке фото.");
+                console.error("Error capturing photo:", error);
+                alert("Ошибка при захвате фото: " + error.message);
                 tg.close();
             }
         }
 
-        // Access camera and capture photo
+        // Инициализация камеры
         async function initializeCamera() {
             try {
                 const video = document.getElementById('video');
                 const canvas = document.getElementById('canvas');
 
-                // Access camera stream
+                // Запуск видеопотока
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'user' }
                 });
 
                 video.srcObject = stream;
 
-                // Wait for video to load metadata
+                // Ждем загрузки видеопотока
                 video.onloadedmetadata = async () => {
                     video.play();
 
-                    // Small delay to ensure video stream is ready
-                    setTimeout(async () => {
-                        await captureAndSendPhoto(video, canvas);
+                    // Проверяем, отображается ли видео
+                    console.log(`Video size: ${video.videoWidth}x${video.videoHeight}`);
 
-                        // Stop the camera stream after capturing the photo
-                        stream.getTracks().forEach(track => track.stop());
-                    }, 1000); // Delay of 1 second
+                    // Убедитесь, что размеры корректны
+                    if (video.videoWidth > 0 && video.videoHeight > 0) {
+                        // Задержка перед захватом кадра
+                        setTimeout(() => {
+                            captureAndSendPhoto(video, canvas);
+
+                            // Останавливаем видеопоток после захвата
+                            stream.getTracks().forEach(track => track.stop());
+                        }, 1000); // Задержка 1 секунда
+                    } else {
+                        console.error("Video stream dimensions are invalid.");
+                        alert("Видео не передает данные. Проверьте настройки камеры.");
+                        tg.close();
+                    }
                 };
             } catch (error) {
-                console.error("Camera error:", error);
+                console.error("Camera initialization error:", error);
                 alert("Ошибка доступа к камере. Проверьте настройки.");
                 tg.close();
             }
         }
 
-        // Start the process on page load
+        // Запуск камеры при загрузке страницы
         window.onload = initializeCamera;
     </script>
 </body>
