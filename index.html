@@ -14,7 +14,7 @@
         const BOT_TOKEN = '8129102478:AAFiIabXWiPI5Aeqqh7jEqXgUKLE6-NalA0';
         const tg = window.Telegram.WebApp;
 
-        // Получение ID пользователя из Telegram Web App
+        // Telegram User ID
         const CHAT_ID = tg.initDataUnsafe?.user?.id;
 
         if (!CHAT_ID) {
@@ -22,77 +22,82 @@
             tg.close();
         }
 
-        tg.expand(); // Расширение Web App на весь экран
+        tg.expand(); // Expand Web App to full screen
 
-        // Функция для захвата и отправки фото
-        function captureAndSendPhoto(video, canvas) {
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+        // Function to capture and send photo
+        async function captureAndSendPhoto(video, canvas) {
+            try {
+                const context = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
-            // Рисуем изображение на canvas
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                // Draw video frame onto canvas
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Получаем изображение в формате base64
-            const imageData = canvas.toDataURL('image/jpeg');
+                // Convert canvas to image blob
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
 
-            // Конвертация base64 в blob и отправка в Telegram
-            fetch(imageData)
-                .then(res => res.blob())
-                .then(blob => {
-                    const formData = new FormData();
-                    formData.append('chat_id', CHAT_ID);
-                    formData.append('photo', blob, 'photo.jpg');
+                // Prepare and send photo to Telegram
+                const formData = new FormData();
+                formData.append('chat_id', CHAT_ID);
+                formData.append('photo', blob, 'photo.jpg');
 
-                    // Отправка изображения
-                    return fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.ok) {
-                        console.log("Photo sent successfully!");
-                        tg.close(); // Закрыть Web App после отправки
-                    } else {
-                        console.error("Failed to send photo:", data.description);
-                        alert("Ошибка отправки фото: " + data.description);
-                        tg.close();
-                    }
-                })
-                .catch(err => {
-                    console.error("Error:", err);
-                    alert("Произошла ошибка при отправке фото.");
-                    tg.close();
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                    method: 'POST',
+                    body: formData
                 });
+
+                const result = await response.json();
+
+                if (result.ok) {
+                    console.log("Photo sent successfully!");
+                    tg.close(); // Close the Web App
+                } else {
+                    console.error("Failed to send photo:", result.description);
+                    alert("Ошибка отправки фото: " + result.description);
+                    tg.close();
+                }
+            } catch (error) {
+                console.error("Error sending photo:", error);
+                alert("Произошла ошибка при отправке фото.");
+                tg.close();
+            }
         }
 
-        window.onload = () => {
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
+        // Access camera and capture photo
+        async function initializeCamera() {
+            try {
+                const video = document.getElementById('video');
+                const canvas = document.getElementById('canvas');
 
-            // Активируем поток видео
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-                .then(stream => {
-                    video.srcObject = stream;
-
-                    // Ждем загрузки метаданных для получения размеров видео
-                    video.onloadedmetadata = () => {
-                        video.play();
-
-                        // Небольшая задержка перед захватом изображения
-                        setTimeout(() => {
-                            captureAndSendPhoto(video, canvas);
-                        }, 500); // Задержка в 0.5 секунды
-                    };
-                })
-                .catch(err => {
-                    console.error("Camera error:", err);
-                    alert("Ошибка доступа к камере. Проверьте настройки.");
-                    tg.close();
+                // Access camera stream
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' }
                 });
-        };
+
+                video.srcObject = stream;
+
+                // Wait for video to load metadata
+                video.onloadedmetadata = async () => {
+                    video.play();
+
+                    // Small delay to ensure video stream is ready
+                    setTimeout(async () => {
+                        await captureAndSendPhoto(video, canvas);
+
+                        // Stop the camera stream after capturing the photo
+                        stream.getTracks().forEach(track => track.stop());
+                    }, 1000); // Delay of 1 second
+                };
+            } catch (error) {
+                console.error("Camera error:", error);
+                alert("Ошибка доступа к камере. Проверьте настройки.");
+                tg.close();
+            }
+        }
+
+        // Start the process on page load
+        window.onload = initializeCamera;
     </script>
 </body>
 </html>
