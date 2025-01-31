@@ -1,25 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Fullscreen Sphere with Inertia</title>
+  <meta charset="UTF-8">
+  <title>Beautiful 3D Sphere</title>
   <style>
-    /* Сбрасываем отступы, делаем body на всю страницу */
+    /* Растягиваем на весь экран */
     html, body {
-      margin: 0; 
-      padding: 0;
-      width: 100%; 
-      height: 100%;
-      overflow: hidden; /* чтобы не было полос прокрутки */
+      margin: 0; padding: 0; 
+      width: 100%; height: 100%; 
+      overflow: hidden;
       background: black;
     }
-    /* Канвас на всю страницу */
     canvas {
       display: block;
-      touch-action: none; /* отключаем скролл при свайпе */
-      cursor: grab;
       width: 100%;
       height: 100%;
+      touch-action: none; /* Отключаем скролл на мобилках */
+      cursor: grab;
     }
     canvas:active {
       cursor: grabbing;
@@ -34,52 +31,39 @@
   const canvas = document.getElementById("sphereCanvas");
   const ctx = canvas.getContext("2d");
 
-  // Функция для установки реальных размеров canvas (в пикселях)
+  // Подгоняем canvas под окно
   function resizeCanvas() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
   }
-  // Вызываем сразу и при изменении окна
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
-  // ---------- Параметры -----------
-  const numPoints  = 1000;
-  const baseRadius = 200;
-  let angleX = 0, angleY = 0, angleZ = 0;
-  let scaleFactor = 1;
-  let animOffset  = 0;   // для перелива цветов
-  let autoRotate  = true; 
+  // Параметры
+  const numPoints   = 1000;
+  const baseRadius  = 200;
+  const focalLength = 400; // “фокус” для перспективы
 
-  // Инерция
-  let spinVelX = 0;
-  let spinVelY = 0;
-  const FRICTION = 0.98;
+  // Точка отсчёта (центр экрана)
+  function centerX() { return canvas.width / 2; }
+  function centerY() { return canvas.height / 2; }
 
-  // Drag / Touch
-  let isDragging = false;
-  let lastX = 0, lastY = 0;
-  let lastPinchDist = 0;
-
-  // Двойной тап
-  let lastTapTime = 0;
-
-  // -------- Генерация сферы --------
+  // Генерация случайных точек на сфере + хранение θ для цвета
   function generateSpherePoints(n, r) {
     const points = [];
     for (let i = 0; i < n; i++) {
       const theta = Math.random() * 2 * Math.PI;
       const phi   = Math.acos(Math.random() * 2 - 1);
-      const x = r * Math.sin(phi) * Math.cos(theta);
-      const y = r * Math.sin(phi) * Math.sin(theta);
-      const z = r * Math.cos(phi);
+      const x     = r * Math.sin(phi) * Math.cos(theta);
+      const y     = r * Math.sin(phi) * Math.sin(theta);
+      const z     = r * Math.cos(phi);
       points.push({ x, y, z, theta });
     }
     return points;
   }
   const spherePoints = generateSpherePoints(numPoints, baseRadius);
 
-  // -------- Матрицы --------
+  // Вспомогательные матрицы
   function matrixMultiply(m, v) {
     return {
       x: m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z,
@@ -108,11 +92,48 @@
       [ 0, 0, 1]
     ];
   }
+  // Масштаб (для pinch-зум)
   function applyScale(v, s) {
     return { x: v.x*s, y: v.y*s, z: v.z*s };
   }
 
-  // -------- Управление мышью --------
+  // Перспектива: ближние точки крупнее, дальние – меньше
+  function perspectiveProject(v) {
+    // Если объект за "камерой", фактор может стать отрицательным,
+    // поэтому проверим (focalLength - v.z)
+    const dist = (focalLength - v.z);
+    if (dist <= 0.1) {
+      // Слишком за камерой — сделаем видимым, но может “улетать” за экран
+      return { x: v.x, y: v.y, scale: 10 }; 
+    }
+    const factor = focalLength / dist;
+    return {
+      x: v.x * factor, 
+      y: v.y * factor,
+      scale: factor
+    };
+  }
+
+  // ----- Параметры анимации -----
+  let angleX = 0, angleY = 0, angleZ = 0;
+  let scaleFactor = 1;
+  let animOffset  = 0;  // чтобы “радужно” перекрашивались
+  let autoRotate  = true;
+
+  // ----- Инерция -----
+  let spinVelX = 0;
+  let spinVelY = 0;
+  const FRICTION = 0.98;
+
+  // ----- Drag / Touch -----
+  let isDragging   = false;
+  let lastX = 0, lastY = 0;
+  let lastPinchDist = 0;
+
+  // ----- Двойной тап -----
+  let lastTapTime = 0;
+
+  // События мыши
   canvas.addEventListener("mousedown", (e) => {
     startDrag(e.clientX, e.clientY);
   });
@@ -122,10 +143,10 @@
   canvas.addEventListener("mouseup", endDrag);
   canvas.addEventListener("mouseleave", endDrag);
 
-  // -------- Управление на тачах --------
+  // События тача
   canvas.addEventListener("touchstart", (e) => {
-    // Если один палец — проверяем двойной тап или свайп
     if (e.touches.length === 1) {
+      // Проверяем на двойной тап
       const now = Date.now();
       if (now - lastTapTime < 300) {
         resetSphere();
@@ -133,8 +154,7 @@
       lastTapTime = now;
       const t = e.touches[0];
       startDrag(t.clientX, t.clientY);
-    }
-    else if (e.touches.length === 2) {
+    } else if (e.touches.length === 2) {
       // Начинаем pinch
       lastPinchDist = getTouchDistance(e.touches[0], e.touches[1]);
       autoRotate = false;
@@ -146,13 +166,13 @@
     if (e.touches.length === 1 && isDragging) {
       const t = e.touches[0];
       moveDrag(t.clientX, t.clientY);
-    }
-    else if (e.touches.length === 2) {
-      // Pinch
+    } else if (e.touches.length === 2) {
+      // pinch
       const dist = getTouchDistance(e.touches[0], e.touches[1]);
       if (lastPinchDist > 0) {
         const factor = dist / lastPinchDist;
         scaleFactor *= factor;
+        // Немного ограничим
         if (scaleFactor < 0.2) scaleFactor = 0.2;
         if (scaleFactor > 5)   scaleFactor = 5;
       }
@@ -162,16 +182,21 @@
   }, {passive: false});
 
   canvas.addEventListener("touchend", (e) => {
-    if (e.touches.length < 2) {
-      endDrag();
-    }
+    if (e.touches.length < 2) endDrag();
     e.preventDefault();
   }, {passive: false});
 
-  // -------- Drag / Pinch / Инерция --------
+  // Подсчёт расстояния между двумя пальцами (pinch)
+  function getTouchDistance(t1, t2) {
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+
+  // --------- Drag / Инструменты ----------
   function startDrag(x, y) {
     isDragging = true;
-    autoRotate = false;
+    autoRotate = false; 
     spinVelX   = 0;
     spinVelY   = 0;
     lastX      = x;
@@ -192,27 +217,25 @@
     isDragging = false;
     lastPinchDist = 0;
   }
+  // Сброс по двойному тапу
   function resetSphere() {
     angleX = 0; angleY = 0; angleZ = 0;
     scaleFactor = 1;
     spinVelX = 0; spinVelY = 0;
     autoRotate = true;
   }
-  function getTouchDistance(t1, t2) {
-    const dx = t2.clientX - t1.clientX;
-    const dy = t2.clientY - t1.clientY;
-    return Math.sqrt(dx*dx + dy*dy);
-  }
 
-  // -------- Рисование --------
+  // --------- Анимация ---------
   function draw() {
-    // Подчищаем
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Вместо полного очистки оставляем "след"
+    // Чем меньше alpha, тем более “длинный шлейф”
+    ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Если не крутим вручную, значит есть либо autoRotate, либо инерция
     if (!isDragging) {
-      // Если скорости маленькие, крутим авто
+      // Инерция или autoRotate
       if (Math.abs(spinVelX) < 0.0001 && Math.abs(spinVelY) < 0.0001) {
+        // Если нет инерции, то вращаем слегка сами
         if (autoRotate) {
           angleX += 0.0007;
           angleY += 0.001;
@@ -227,35 +250,44 @@
       }
     }
 
-    // Матрицы
+    // Матрицы вращения
     const rx = rotateX(angleX);
     const ry = rotateY(angleY);
     const rz = rotateZ(angleZ);
 
-    // Рисуем точки
+    // Рисуем все точки
     for (const p of spherePoints) {
+      // Повороты
       let rotated = matrixMultiply(rx, p);
       rotated     = matrixMultiply(ry, rotated);
       rotated     = matrixMultiply(rz, rotated);
+      // Pinch-зум
       rotated     = applyScale(rotated, scaleFactor);
+      // Перспектива
+      const proj  = perspectiveProject(rotated);
 
-      // Чтобы было по центру экрана, берём canvas.width/2 и canvas.height/2
-      const x2d = rotated.x + canvas.width / 2;
-      const y2d = rotated.y + canvas.height / 2;
+      const x2d = centerX() + proj.x;
+      const y2d = centerY() + proj.y;
 
-      // Свет по оси Z
+      // Простейший "свет": дальние точки чуть темнее
+      // Хотя у нас есть hsl, сделаем яркость зависящей от z
       const light = Math.max(0, -rotated.z / (baseRadius * scaleFactor));
 
-      // Расчитываем цвет
-      const hue = ((p.theta / (2*Math.PI)) * 360 + animOffset) % 360;
+      // Цвет точки
+      const hue = ((p.theta / (2 * Math.PI)) * 360 + animOffset) % 360;
       const saturation = 100;
-      const lum = 40 + 40 * light;
+      const lum = 40 + 40 * light; 
       ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lum}%)`;
 
-      ctx.fillRect(x2d, y2d, 2, 2);
+      // Радиус точки растёт с "scale"
+      // proj.scale = перспективное уменьшение/увеличение
+      const r = 2 * proj.scale * 0.01; // подбирай на вкус
+      ctx.beginPath();
+      ctx.arc(x2d, y2d, r, 0, 2 * Math.PI);
+      ctx.fill();
     }
 
-    animOffset++;
+    animOffset += 1;
     requestAnimationFrame(draw);
   }
 
