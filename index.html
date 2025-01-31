@@ -1,21 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Cosmic Sphere</title>
+  <meta charset="UTF-8">
+  <title>Fake Earth Sphere</title>
   <style>
+    /* Полный экран */
     html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100%;
-      background: black; /* запасной фон */
-      overflow: hidden;   /* убираем скролл */
+      margin: 0; 
+      padding: 0;
+      width: 100%; 
+      height: 100%;
+      overflow: hidden;
+      background: black;
     }
+    /* Канвас на всю страницу */
     canvas {
       display: block;
+      touch-action: none; /* Отключаем скролл при свайпе */
+      cursor: grab;
       width: 100%;
       height: 100%;
-      touch-action: none;
-      cursor: grab;
     }
     canvas:active {
       cursor: grabbing;
@@ -29,7 +33,6 @@
   const canvas = document.getElementById("sphereCanvas");
   const ctx    = canvas.getContext("2d");
 
-  // Подгоняем под размер окна
   function resizeCanvas() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -37,64 +40,84 @@
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
-  // ---------- ПАРАМЕТРЫ ----------
-  const numPoints  = 1000;
-  const baseRadius = 200;
-  // Сфера: углы, масштаб, сдвиг цвета
-  let angleX = 0, angleY = 0, angleZ = 0;
-  let scaleFactor = 1;
-  let animOffset  = 0;
-  let autoRotate  = true;
+  // Параметры "глобуса"
+  const baseRadius = 200;  
+  const latSteps   = 50;   // Число горизонтальных "полос"
+  const lonSteps   = 50;   // Число "долгот"
+  
+  // Вращение/Анимация
+  let angleX      = 0;
+  let angleY      = 0;
+  let angleZ      = 0;
+  let scaleFactor = 1;     // pinch-зум
+  let autoRotate  = true;  // лёгкая автопрокрутка
 
-  // Инерция вращения
+  // Инерция
   let spinVelX = 0;
   let spinVelY = 0;
-  const FRICTION = 0.98;
+  const FRICTION = 0.98; // затухание
 
-  // Для drag и pinch
-  let isDragging   = false;
-  let lastX = 0, lastY = 0;
+  // Перетаскивание
+  let isDragging    = false;
+  let lastX         = 0, lastY = 0;
   let lastPinchDist = 0;
 
-  // Двойной тап
+  // Двойной тап — сброс
   let lastTapTime = 0;
 
-  // ---------- ГЕНЕРИМ СФЕРУ ----------
-  function generateSpherePoints(n, r) {
-    const points = [];
-    for (let i = 0; i < n; i++) {
-      const theta = Math.random() * 2 * Math.PI;
-      const phi   = Math.acos(Math.random() * 2 - 1);
-      const x = r * Math.sin(phi) * Math.cos(theta);
-      const y = r * Math.sin(phi) * Math.sin(theta);
-      const z = r * Math.cos(phi);
-      points.push({ x, y, z, theta });
+  // Генерируем массив точек (широта, долгота)
+  let spherePoints = [];
+  function generateEarthPoints() {
+    spherePoints = [];
+    for (let lat = 0; lat <= latSteps; lat++) {
+      // phi: от 0 (северный полюс) до PI (южный полюс)
+      const phi = (lat / latSteps) * Math.PI;
+
+      for (let lon = 0; lon <= lonSteps; lon++) {
+        // theta: от 0 до 2*PI
+        const theta = (lon / lonSteps) * 2 * Math.PI;
+
+        const x = baseRadius * Math.sin(phi) * Math.cos(theta);
+        const y = baseRadius * Math.sin(phi) * Math.sin(theta);
+        const z = baseRadius * Math.cos(phi);
+
+        spherePoints.push({ x, y, z, phi, theta });
+      }
     }
-    return points;
   }
-  const spherePoints = generateSpherePoints(numPoints, baseRadius);
+  generateEarthPoints();
 
-  // ---------- ЗВЁЗДОЧКИ ДЛЯ ФОНА ----------
-  const starsCount = 200;
-  const stars = [];
-  for (let i = 0; i < starsCount; i++) {
-    // Случайные координаты
-    stars.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      size: Math.random() * 2 + 0.5,
-      baseAlpha: Math.random() * 0.5 + 0.3, // базовая “яркость”
-      flicker: 0,
-      flickerSpeed: Math.random() * 0.05 + 0.02 // скорость мерцания
-    });
+  // Придумываем “цвет Земли” без текстуры
+  // - Белые полюса (phi очень маленький/большой)
+  // - “Шум” для континентов/океанов
+  function getFakeEarthColor(phi, theta) {
+    // Полярные шапки (например, 0.2 радиан ~ 11.5 градусов)
+    if (phi < 0.2 || phi > Math.PI - 0.2) {
+      return { r: 255, g: 255, b: 255 }; // белый
+    }
+
+    // Простая шумовая формула
+    // Чем больше значение, тем "вероятнее" суша
+    const val = Math.sin(6 * theta) + 0.5 * Math.cos(4 * phi);
+
+    if (val > 0.5) {
+      // Пускай будет "пустыня"
+      return { r: 210, g: 180, b: 140 }; // tan
+    } else if (val > 0) {
+      // Леса
+      return { r: 34, g: 139, b: 34 }; // forestgreen
+    } else {
+      // Океан
+      return { r: 0, g: 105, b: 148 }; // deep ocean
+    }
   }
 
-  // ---------- МАТРИЦЫ И ФУНКЦИИ ВРАЩЕНИЯ ----------
+  // Матрицы вращения
   function matrixMultiply(m, v) {
     return {
-      x: m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z,
-      y: m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z,
-      z: m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z
+      x: m[0][0]*v.x + m[0][1]*v.y + m[0][2]*v.z,
+      y: m[1][0]*v.x + m[1][1]*v.y + m[1][2]*v.z,
+      z: m[2][0]*v.x + m[2][1]*v.y + m[2][2]*v.z
     };
   }
   function rotateX(a) {
@@ -122,7 +145,7 @@
     return { x: v.x*s, y: v.y*s, z: v.z*s };
   }
 
-  // ---------- МЫШЬ ----------
+  // ----- Управление мышью -----
   canvas.addEventListener("mousedown", (e) => {
     startDrag(e.clientX, e.clientY);
   });
@@ -132,18 +155,19 @@
   canvas.addEventListener("mouseup", endDrag);
   canvas.addEventListener("mouseleave", endDrag);
 
-  // ---------- ТАЧ ----------
+  // ----- Управление на сенсоре (touch) -----
   canvas.addEventListener("touchstart", (e) => {
     if (e.touches.length === 1) {
+      // Проверка на двойной тап
       const now = Date.now();
-      // Двойной тап
-      if (now - lastTapTime < 300) resetSphere();
+      if (now - lastTapTime < 300) {
+        resetSphere();
+      }
       lastTapTime = now;
-
       const t = e.touches[0];
       startDrag(t.clientX, t.clientY);
     } else if (e.touches.length === 2) {
-      // Начинаем pinch
+      // Pinch (зум)
       lastPinchDist = getTouchDistance(e.touches[0], e.touches[1]);
       autoRotate = false;
     }
@@ -155,11 +179,10 @@
       const t = e.touches[0];
       moveDrag(t.clientX, t.clientY);
     } else if (e.touches.length === 2) {
-      // Pinch
+      // Двумя пальцами — pinch
       const dist = getTouchDistance(e.touches[0], e.touches[1]);
-      if (lastPinchDist) {
-        const factor = dist / lastPinchDist;
-        scaleFactor *= factor;
+      if (lastPinchDist > 0) {
+        scaleFactor *= (dist / lastPinchDist);
         if (scaleFactor < 0.2) scaleFactor = 0.2;
         if (scaleFactor > 5)   scaleFactor = 5;
       }
@@ -169,11 +192,13 @@
   }, {passive: false});
 
   canvas.addEventListener("touchend", (e) => {
-    if (e.touches.length < 2) endDrag();
+    if (e.touches.length < 2) {
+      endDrag();
+    }
     e.preventDefault();
   }, {passive: false});
 
-  // ---------- DRAG / PINCH / ИНЕРЦИЯ ----------
+  // ----- Вспомогательные функции -----
   function startDrag(x, y) {
     isDragging = true;
     autoRotate = false;
@@ -185,61 +210,46 @@
   function moveDrag(x, y) {
     const dx = x - lastX;
     const dy = y - lastY;
-    angleY  += dx * 0.01;
-    angleX  += dy * 0.01;
+    angleY += dx * 0.01;
+    angleX += dy * 0.01;
     spinVelX = dy * 0.01;
     spinVelY = dx * 0.01;
     lastX = x;
     lastY = y;
   }
   function endDrag() {
-    isDragging     = false;
-    lastPinchDist  = 0;
-  }
-  function resetSphere() {
-    angleX = 0; angleY = 0; angleZ = 0;
-    scaleFactor = 1;
-    spinVelX = 0; spinVelY = 0;
-    autoRotate = true;
+    isDragging = false;
+    lastPinchDist = 0;
   }
   function getTouchDistance(t1, t2) {
     const dx = t2.clientX - t1.clientX;
     const dy = t2.clientY - t1.clientY;
     return Math.sqrt(dx*dx + dy*dy);
   }
+  // Сброс (двойной тап)
+  function resetSphere() {
+    angleX = 0; angleY = 0; angleZ = 0;
+    scaleFactor = 1;
+    spinVelX = 0; spinVelY = 0;
+    autoRotate = true;
+  }
 
-  // ---------- АНИМАЦИЯ ----------
+  // ----- Основной цикл рисования -----
+  requestAnimationFrame(draw);
   function draw() {
-    // Рисуем градиент в качестве фона
-    // (радиальный градиент от центра к краям)
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(cx, cy));
-    grd.addColorStop(0,  "#000033"); // темно-синий в центре
-    grd.addColorStop(1,  "#000000"); // чёрный по краям
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Рисуем звёзды (слегка мерцают)
-    for (let s of stars) {
-      s.flicker += s.flickerSpeed;
-      // Колебание альфа-канала (sin)
-      const alpha = s.baseAlpha + 0.2 * Math.sin(s.flicker);
-      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-      ctx.fillRect(s.x, s.y, s.size, s.size);
-    }
-
-    // Если не тянем сферу
+    // Если шар не крутят, включаем либо авто-поворот, либо инерцию
     if (!isDragging) {
-      // Если инерции почти нет, включаем autoRotate
       if (Math.abs(spinVelX) < 0.0001 && Math.abs(spinVelY) < 0.0001) {
+        // Автоповорот
         if (autoRotate) {
           angleX += 0.0007;
           angleY += 0.001;
           angleZ += 0.0007;
         }
       } else {
-        // Инерция вращения
+        // Инерция
         angleX += spinVelX;
         angleY += spinVelY;
         spinVelX *= FRICTION;
@@ -247,39 +257,41 @@
       }
     }
 
-    // Матрицы вращения
+    // Собираем матрицы
     const rx = rotateX(angleX);
     const ry = rotateY(angleY);
     const rz = rotateZ(angleZ);
 
-    // Рендерим радужные точки
+    // Рисуем все точки
     for (const p of spherePoints) {
+      // Повернём
       let rotated = matrixMultiply(rx, p);
       rotated     = matrixMultiply(ry, rotated);
       rotated     = matrixMultiply(rz, rotated);
+      // Масштаб
       rotated     = applyScale(rotated, scaleFactor);
 
-      // Смещаем в центр
-      const x2d = rotated.x + cx;
-      const y2d = rotated.y + cy;
+      const x2d = rotated.x + canvas.width / 2;
+      const y2d = rotated.y + canvas.height / 2;
 
-      // Свет по оси Z
+      // Простейшее "освещение": ближняя сторона чуть светлее
       const light = Math.max(0, -rotated.z / (baseRadius * scaleFactor));
 
-      // Радужный цвет по θ + анимация
-      const hue = ((p.theta / (2*Math.PI)) * 360 + animOffset) % 360;
-      const saturation = 100;
-      const lum = 40 + 40 * light;
-      ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lum}%)`;
+      // Получаем цвет (океан, суша, полюса) по широте/долготе
+      const {r, g, b} = getFakeEarthColor(p.phi, p.theta);
 
+      // Притемняем “теневую” сторону
+      const R = Math.floor(r * (0.6 + 0.4 * light));
+      const G = Math.floor(g * (0.6 + 0.4 * light));
+      const B = Math.floor(b * (0.6 + 0.4 * light));
+
+      ctx.fillStyle = `rgb(${R},${G},${B})`;
+      // Ставим крошечный пиксель
       ctx.fillRect(x2d, y2d, 2, 2);
     }
 
-    animOffset++;
     requestAnimationFrame(draw);
   }
-
-  draw();
 </script>
 </body>
 </html>
