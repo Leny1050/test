@@ -2,18 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Fake Earth Sphere</title>
+  <title>Approx Earth from Points</title>
   <style>
-    /* Полный экран */
+    /* На весь экран */
     html, body {
-      margin: 0; 
+      margin: 0;
       padding: 0;
-      width: 100%; 
+      width: 100%;
       height: 100%;
       overflow: hidden;
       background: black;
     }
-    /* Канвас на всю страницу */
+    /* Полноэкранный canvas */
     canvas {
       display: block;
       touch-action: none; /* Отключаем скролл при свайпе */
@@ -33,6 +33,7 @@
   const canvas = document.getElementById("sphereCanvas");
   const ctx    = canvas.getContext("2d");
 
+  // Подгоняем canvas под размеры окна
   function resizeCanvas() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -40,43 +41,45 @@
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
-  // Параметры "глобуса"
-  const baseRadius = 200;  
-  const latSteps   = 50;   // Число горизонтальных "полос"
-  const lonSteps   = 50;   // Число "долгот"
+  // ======= ПАРАМЕТРЫ СФЕРЫ =======
+  const baseRadius = 200;  // Радиус условного "глобуса"
+  const latSteps   = 60;   // Сколько шагов по широте (чем больше, тем плавнее)
+  const lonSteps   = 60;   // Сколько шагов по долготе
   
-  // Вращение/Анимация
+  // ======= ВРАЩЕНИЕ / АНИМАЦИЯ =======
   let angleX      = 0;
   let angleY      = 0;
   let angleZ      = 0;
-  let scaleFactor = 1;     // pinch-зум
-  let autoRotate  = true;  // лёгкая автопрокрутка
+  let scaleFactor = 1;     
+  let autoRotate  = true;  // Автоматическая лёгкая прокрутка
 
   // Инерция
   let spinVelX = 0;
   let spinVelY = 0;
-  const FRICTION = 0.98; // затухание
+  const FRICTION = 0.98; 
 
-  // Перетаскивание
+  // Управление мышью/тачами
   let isDragging    = false;
   let lastX         = 0, lastY = 0;
   let lastPinchDist = 0;
 
-  // Двойной тап — сброс
+  // Двойной тап – сброс
   let lastTapTime = 0;
 
-  // Генерируем массив точек (широта, долгота)
+  // ======= ГЕНЕРАЦИЯ ТОЧЕК ПО ШИРОТЕ/ДОЛГОТЕ =======
+  // phi = [0..π]  (от северного полюса к южному)
+  // theta = [0..2π]
+  // x = r * sin(phi)*cos(theta)
+  // y = r * sin(phi)*sin(theta)
+  // z = r * cos(phi)
   let spherePoints = [];
-  function generateEarthPoints() {
+  function generatePoints() {
     spherePoints = [];
-    for (let lat = 0; lat <= latSteps; lat++) {
-      // phi: от 0 (северный полюс) до PI (южный полюс)
-      const phi = (lat / latSteps) * Math.PI;
-
-      for (let lon = 0; lon <= lonSteps; lon++) {
-        // theta: от 0 до 2*PI
-        const theta = (lon / lonSteps) * 2 * Math.PI;
-
+    for (let latI = 0; latI <= latSteps; latI++) {
+      const phi = (latI / latSteps) * Math.PI; 
+      for (let lonI = 0; lonI <= lonSteps; lonI++) {
+        const theta = (lonI / lonSteps) * 2 * Math.PI;
+        
         const x = baseRadius * Math.sin(phi) * Math.cos(theta);
         const y = baseRadius * Math.sin(phi) * Math.sin(theta);
         const z = baseRadius * Math.cos(phi);
@@ -85,34 +88,89 @@
       }
     }
   }
-  generateEarthPoints();
+  generatePoints();
 
-  // Придумываем “цвет Земли” без текстуры
-  // - Белые полюса (phi очень маленький/большой)
-  // - “Шум” для континентов/океанов
-  function getFakeEarthColor(phi, theta) {
-    // Полярные шапки (например, 0.2 радиан ~ 11.5 градусов)
-    if (phi < 0.2 || phi > Math.PI - 0.2) {
-      return { r: 255, g: 255, b: 255 }; // белый
+  // ======= “КОНТИНЕНТЫ” ЧЕРЕЗ “ЛУНКИ” =======
+  // Идея: задаём массив "континентов" с центрами (lat, lon) и радиусами (в радианах).
+  // Затем проверяем, находится ли точка вблизи одного из них.
+  // Координаты lat, lon считаем в [-π/2..+π/2] и [-π..+π].
+  // lat = π/2 - phi, lon = theta в [-π..π].
+  // Примерно подогнали центры основных масс суши:
+  const continents = [
+    // Северная Америка
+    { lat: 0.78, lon: -1.30, radius: 0.53 },
+    // Южная Америка
+    { lat: -0.3, lon: -1.0, radius: 0.35 },
+    // Африка + Европа (объединим в одну большую зону)
+    { lat: 0.2, lon: 0.15, radius: 0.62 },
+    // Азия (справа)
+    { lat: 0.5, lon: 1.4, radius: 0.55 },
+    // Австралия
+    { lat: -0.4, lon: 2.4, radius: 0.3 },
+    // Гренландия
+    { lat: 1.0, lon: -0.7, radius: 0.2 }
+  ];
+
+  // Для Антарктиды сделаем отдельную “лунку”, чтобы не надеяться только на полярные шапки
+  continents.push({ lat: -1.3, lon: 0.0, radius: 0.55 });
+
+  // Сферическое расстояние (угол между двумя точками в рад)
+  function sphericalDistance(lat1, lon1, lat2, lon2) {
+    // Формула: cos(d) = sin(lat1)sin(lat2) + cos(lat1)cos(lat2)cos(lon2-lon1)
+    return Math.acos(
+      Math.sin(lat1)*Math.sin(lat2) + 
+      Math.cos(lat1)*Math.cos(lat2)*Math.cos(lon2 - lon1)
+    );
+  }
+
+  // Проверяем, является ли точка (lat, lon) сушей
+  function isLand(lat, lon) {
+    // Смотрим, попадает ли в одну из “континентальных лунок”
+    for (let c of continents) {
+      const d = sphericalDistance(lat, lon, c.lat, c.lon);
+      if (d < c.radius) {
+        return true; // внутри “континента”
+      }
+    }
+    return false;
+  }
+
+  // ======= ПОЛУЧАЕМ ЦВЕТ “ЗЕМЛИ” БЕЗ КАРТИНКИ =======
+  // 1. Смотрим, не полюс ли (phi ~ 0 => север, phi ~ π => юг) – делаем белые шапки.
+  // 2. Иначе проверяем isLand(...) – если да, даём зелёно-коричневый цвет.
+  // 3. Если нет – делаем синий океан.
+  function getEarthColor(phi, theta) {
+    // Переводим phi,theta -> lat,lon
+    // lat = (от -π/2 до +π/2), lon = (от -π до +π)
+    const lat = Math.PI/2 - phi;               // phi=0 => lat=+π/2, phi=π => -π/2
+    let lon   = theta;                         
+    if (lon > Math.PI) lon -= 2*Math.PI;       // shift в диапазон [-π..+π]
+
+    // Полярные шапки (берём ~15 градусов = ~0.26 рад)
+    if (phi < 0.26 || phi > (Math.PI - 0.26)) {
+      return { r: 255, g: 255, b: 255 }; // белые шапки
     }
 
-    // Простая шумовая формула
-    // Чем больше значение, тем "вероятнее" суша
-    const val = Math.sin(6 * theta) + 0.5 * Math.cos(4 * phi);
-
-    if (val > 0.5) {
-      // Пускай будет "пустыня"
-      return { r: 210, g: 180, b: 140 }; // tan
-    } else if (val > 0) {
-      // Леса
-      return { r: 34, g: 139, b: 34 }; // forestgreen
+    // Смотрим, суша или океан:
+    if (isLand(lat, lon)) {
+      // “Суша”
+      // Разделим “трава/леса” (север) и “пустыня” (ближе к экватору),
+      // просто для разнообразия:
+      const absLatDeg = Math.abs(lat) * (180/Math.PI);
+      if (absLatDeg < 25) {
+        // Экватор – коричневая/песочная
+        return { r: 210, g: 180, b: 140 };
+      } else {
+        // Средние широты – зелень
+        return { r: 34, g: 139, b: 34 };
+      }
     } else {
       // Океан
-      return { r: 0, g: 105, b: 148 }; // deep ocean
+      return { r: 0, g: 105, b: 148 };
     }
   }
 
-  // Матрицы вращения
+  // ======= МАТРИЦЫ ВРАЩЕНИЯ =======
   function matrixMultiply(m, v) {
     return {
       x: m[0][0]*v.x + m[0][1]*v.y + m[0][2]*v.z,
@@ -145,7 +203,7 @@
     return { x: v.x*s, y: v.y*s, z: v.z*s };
   }
 
-  // ----- Управление мышью -----
+  // ======= МЫШЬ =======
   canvas.addEventListener("mousedown", (e) => {
     startDrag(e.clientX, e.clientY);
   });
@@ -155,15 +213,16 @@
   canvas.addEventListener("mouseup", endDrag);
   canvas.addEventListener("mouseleave", endDrag);
 
-  // ----- Управление на сенсоре (touch) -----
+  // ======= ТАЧ =======
   canvas.addEventListener("touchstart", (e) => {
     if (e.touches.length === 1) {
-      // Проверка на двойной тап
+      // Проверяем на двойной тап (сброс)
       const now = Date.now();
       if (now - lastTapTime < 300) {
         resetSphere();
       }
       lastTapTime = now;
+
       const t = e.touches[0];
       startDrag(t.clientX, t.clientY);
     } else if (e.touches.length === 2) {
@@ -179,7 +238,7 @@
       const t = e.touches[0];
       moveDrag(t.clientX, t.clientY);
     } else if (e.touches.length === 2) {
-      // Двумя пальцами — pinch
+      // Зум
       const dist = getTouchDistance(e.touches[0], e.touches[1]);
       if (lastPinchDist > 0) {
         scaleFactor *= (dist / lastPinchDist);
@@ -198,7 +257,7 @@
     e.preventDefault();
   }, {passive: false});
 
-  // ----- Вспомогательные функции -----
+  // ======= ФУНКЦИИ ПЕРЕТАСКИВАНИЯ / PINCH =======
   function startDrag(x, y) {
     isDragging = true;
     autoRotate = false;
@@ -226,6 +285,7 @@
     const dy = t2.clientY - t1.clientY;
     return Math.sqrt(dx*dx + dy*dy);
   }
+
   // Сброс (двойной тап)
   function resetSphere() {
     angleX = 0; angleY = 0; angleZ = 0;
@@ -234,12 +294,12 @@
     autoRotate = true;
   }
 
-  // ----- Основной цикл рисования -----
+  // ======= ЦИКЛ РИСОВАНИЯ =======
   requestAnimationFrame(draw);
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Если шар не крутят, включаем либо авто-поворот, либо инерцию
+    // Если шар не крутят, идёт либо autoRotate, либо инерция
     if (!isDragging) {
       if (Math.abs(spinVelX) < 0.0001 && Math.abs(spinVelY) < 0.0001) {
         // Автоповорот
@@ -257,14 +317,14 @@
       }
     }
 
-    // Собираем матрицы
+    // Матрицы вращения
     const rx = rotateX(angleX);
     const ry = rotateY(angleY);
     const rz = rotateZ(angleZ);
 
-    // Рисуем все точки
+    // Рисуем точки “глобуса”
     for (const p of spherePoints) {
-      // Повернём
+      // Поворот
       let rotated = matrixMultiply(rx, p);
       rotated     = matrixMultiply(ry, rotated);
       rotated     = matrixMultiply(rz, rotated);
@@ -274,19 +334,17 @@
       const x2d = rotated.x + canvas.width / 2;
       const y2d = rotated.y + canvas.height / 2;
 
-      // Простейшее "освещение": ближняя сторона чуть светлее
+      // Освещение: ближняя сторона ярче, дальняя темнее
       const light = Math.max(0, -rotated.z / (baseRadius * scaleFactor));
-
-      // Получаем цвет (океан, суша, полюса) по широте/долготе
-      const {r, g, b} = getFakeEarthColor(p.phi, p.theta);
-
-      // Притемняем “теневую” сторону
+      
+      // Выбираем цвет “Земли”
+      const {r, g, b} = getEarthColor(p.phi, p.theta);
+      // Затемняем обратную сторону
       const R = Math.floor(r * (0.6 + 0.4 * light));
       const G = Math.floor(g * (0.6 + 0.4 * light));
       const B = Math.floor(b * (0.6 + 0.4 * light));
 
       ctx.fillStyle = `rgb(${R},${G},${B})`;
-      // Ставим крошечный пиксель
       ctx.fillRect(x2d, y2d, 2, 2);
     }
 
@@ -294,4 +352,4 @@
   }
 </script>
 </body>
-</html>
+</html> 
